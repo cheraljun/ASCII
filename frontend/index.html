@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片/视频转ASCII</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>图片/视频转ASCII</h1>
+
+        <div class="main-content">
+            <!-- 左侧参数面板 -->
+            <div class="panel">
+                <h2>参数</h2>
+
+                <!-- 上传区域 -->
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-text">点击或拖拽图片/视频到这里</div>
+                    <input type="file" id="fileInput" accept="image/*,video/*">
+                </div>
+
+                <div class="file-type-indicator" id="fileTypeIndicator"></div>
+
+                <!-- 宽度 -->
+                <div class="param-group">
+                    <label>
+                        宽度（字符数）
+                        <span class="range-value" id="widthValue">100</span>
+                    </label>
+                    <input type="range" id="width" min="30" max="150" value="100" step="1">
+                </div>
+
+                <!-- 对比度 -->
+                <div class="param-group">
+                    <label>
+                        对比度
+                        <span class="range-value" id="contrastValue">1.0</span>
+                    </label>
+                    <input type="range" id="contrast" min="0.5" max="2.0" value="1.0" step="0.1">
+                </div>
+
+                <!-- 视频控制（仅视频时显示） -->
+                <div class="param-group hidden" id="videoControls">
+                    <label>视频控制</label>
+                    <div class="video-control-buttons">
+                        <button class="btn btn-small" id="playPauseBtn">播放</button>
+                        <button class="btn btn-small" id="stopBtn">停止</button>
+                    </div>
+                    <div class="video-timeline">
+                        <input type="range" id="videoTimeline" min="0" max="100" value="0" step="0.1">
+                        <div class="video-time">
+                            <span id="currentTime">0.0s</span> / <span id="totalTime">0.0s</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 导出进度 -->
+                <div class="param-group hidden" id="exportProgress">
+                    <label>导出进度</label>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">0%</div>
+                </div>
+
+                <!-- 下载按钮 -->
+                <div class="download-actions">
+                    <button class="btn btn-secondary" id="downloadTxtBtn">下载当前帧 TXT</button>
+                    <button class="btn btn-secondary hidden" id="exportFramesBtn">导出所有帧 TXT</button>
+                    <button class="btn btn-secondary hidden" id="exportVideoBtn">导出 ASCII 视频</button>
+                </div>
+            </div>
+
+            <!-- 右侧结果面板 -->
+            <div class="panel result-area">
+                <h2>结果预览</h2>
+                <div id="resultContainer">
+                    <div class="empty-state">
+                        <div>请上传图片或视频</div>
+                        <div style="font-size: 0.9rem; color: #666; margin-top: 10px;">
+                            支持 jpg, png, gif, mp4, avi, mov 等格式
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
