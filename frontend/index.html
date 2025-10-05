@@ -17,8 +17,8 @@
 
                 <!-- 上传区域 -->
                 <div class="upload-area" id="uploadArea">
-                    <div class="upload-text">点击或拖拽图片/视频到这里</div>
-                    <input type="file" id="fileInput" accept="image/*,video/*">
+                    <div class="upload-text">点击或拖拽图片/视频/GIF到这里</div>
+                    <input type="file" id="fileInput" accept="image/*,video/*,.gif">
                 </div>
 
                 <div class="file-type-indicator" id="fileTypeIndicator"></div>
@@ -39,6 +39,33 @@
                         <span class="range-value" id="contrastValue">1.0</span>
                     </label>
                     <input type="range" id="contrast" min="0.5" max="2.0" value="1.0" step="0.1">
+                </div>
+
+                <!-- 字符颜色 -->
+                <div class="param-group">
+                    <label>字符颜色</label>
+                    <div class="radio-group">
+                        <label>
+                            <input type="radio" name="color" value="white" checked>
+                            白色
+                        </label>
+                        <label>
+                            <input type="radio" name="color" value="yellow">
+                            黄色
+                        </label>
+                        <label>
+                            <input type="radio" name="color" value="green">
+                            绿色
+                        </label>
+                        <label>
+                            <input type="radio" name="color" value="orange">
+                            橙色
+                        </label>
+                        <label>
+                            <input type="radio" name="color" value="cyan">
+                            青色
+                        </label>
+                    </div>
                 </div>
 
                 <!-- 视频控制（仅视频时显示） -->
@@ -67,9 +94,9 @@
 
                 <!-- 下载按钮 -->
                 <div class="download-actions">
-                    <button class="btn btn-secondary" id="downloadTxtBtn">下载当前帧 TXT</button>
-                    <button class="btn btn-secondary hidden" id="exportFramesBtn">导出所有帧 TXT</button>
+                    <button class="btn btn-secondary" id="exportImageBtn">导出为图片</button>
                     <button class="btn btn-secondary hidden" id="exportVideoBtn">导出 ASCII 视频</button>
+                    <button class="btn btn-secondary hidden" id="exportGifBtn">导出 ASCII GIF</button>
                 </div>
             </div>
 
@@ -78,7 +105,7 @@
                 <h2>结果预览</h2>
                 <div id="resultContainer">
                     <div class="empty-state">
-                        <div>请上传图片或视频</div>
+                        <div>请上传图片、视频或GIF</div>
                         <div style="font-size: 0.9rem; color: #666; margin-top: 10px;">
                             支持 jpg, png, gif, mp4, avi, mov 等格式
                         </div>

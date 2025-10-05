@@ -15,9 +15,10 @@ let currentTime = 0;
 // DOM元素（等待页面加载后初始化）
 let uploadArea, fileInput, uploadText, fileTypeIndicator, resultContainer;
 let widthInput, widthValue, contrastInput, contrastValue;
+let colorRadios;
 let videoControls, playPauseBtn, stopBtn, videoTimeline, currentTimeDisplay, totalTimeDisplay;
 let exportProgress, progressFill, progressText;
-let downloadTxtBtn, exportFramesBtn, exportVideoBtn;
+let exportImageBtn, exportVideoBtn, exportGifBtn;
 
 // ===== 初始化 =====
 
@@ -34,6 +35,7 @@ function initializeDOM() {
     widthValue = document.getElementById('widthValue');
     contrastInput = document.getElementById('contrast');
     contrastValue = document.getElementById('contrastValue');
+    colorRadios = document.querySelectorAll('input[name="color"]');
 
     // 视频控制
     videoControls = document.getElementById('videoControls');
@@ -49,9 +51,9 @@ function initializeDOM() {
     progressText = document.getElementById('progressText');
 
     // 下载按钮
-    downloadTxtBtn = document.getElementById('downloadTxtBtn');
-    exportFramesBtn = document.getElementById('exportFramesBtn');
+    exportImageBtn = document.getElementById('exportImageBtn');
     exportVideoBtn = document.getElementById('exportVideoBtn');
+    exportGifBtn = document.getElementById('exportGifBtn');
     
     // 初始化完成后设置事件监听
     setupEventListeners();
@@ -77,7 +79,9 @@ function showLoading() {
 
 function showResult(asciiText) {
     currentAsciiText = asciiText;
-    resultContainer.innerHTML = `<div class="result-preview">${escapeHtml(asciiText)}</div>`;
+    const params = getParams();
+    const colorClass = `color-${params.color}`;
+    resultContainer.innerHTML = `<div class="result-preview ${colorClass}">${escapeHtml(asciiText)}</div>`;
 }
 
 function showError(message) {
@@ -96,9 +100,19 @@ function escapeHtml(text) {
 }
 
 function getParams() {
+    // 获取选中的颜色
+    let selectedColor = 'white';
+    for (const radio of colorRadios) {
+        if (radio.checked) {
+            selectedColor = radio.value;
+            break;
+        }
+    }
+    
     return {
         width: parseInt(widthInput.value),
-        contrast: parseFloat(contrastInput.value)
+        contrast: parseFloat(contrastInput.value),
+        color: selectedColor
     };
 }
 
@@ -162,9 +176,8 @@ async function loadVideo() {
             
             // 更新UI
             videoControls.classList.remove('hidden');
-            exportFramesBtn.classList.remove('hidden');
             exportVideoBtn.classList.remove('hidden');
-            downloadTxtBtn.textContent = '下载当前帧 TXT';
+            exportGifBtn.classList.remove('hidden');
             
             videoTimeline.max = videoInfo.duration;
             totalTimeDisplay.textContent = videoInfo.duration.toFixed(1) + 's';
@@ -254,21 +267,21 @@ function stopVideo() {
     showVideoFrame(0);
 }
 
-// 导出所有帧为TXT
-async function exportAllFrames() {
-    if (!videoPath) return;
-    
-    exportProgress.classList.remove('hidden');
-    exportFramesBtn.disabled = true;
-    exportFramesBtn.textContent = '正在导出...';
-    
-    // 模拟进度（基于帧数估算）
-    const estimatedTime = videoInfo.frame_count * 50; // 每帧约50ms
-    simulateProgress(estimatedTime);
+// 导出为图片
+async function exportImage() {
+    if (!currentFile) {
+        alert('请先上传图片或视频');
+        return;
+    }
     
     const formData = new FormData();
-    formData.append('video_path', videoPath);
-    formData.append('filename', currentFile.name);
+    
+    if (currentFileType === 'image') {
+        formData.append('file', currentFile);
+    } else if (currentFileType === 'video') {
+        formData.append('video_path', videoPath);
+        formData.append('time_sec', currentTime);
+    }
     
     const params = getParams();
     Object.keys(params).forEach(key => {
@@ -276,53 +289,47 @@ async function exportAllFrames() {
     });
     
     try {
-        const response = await fetch('/api/convert/video/export_frames', {
+        const endpoint = currentFileType === 'image' 
+            ? '/api/convert/image/export_png' 
+            : '/api/convert/video/export_frame_png';
+            
+        const response = await fetch(endpoint, {
             method: 'POST',
             body: formData
         });
         
         if (response.ok) {
-            // 清除定时器，立即跳到100%
-            clearProgressTimer();
-            progressFill.style.width = '100%';
-            progressText.textContent = '100%';
-            
             const blob = await response.blob();
-            const fileName = currentFile.name.split('.')[0];
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${fileName}_ascii_frames.zip`;
+            a.download = 'ascii_art.png';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            
-            setTimeout(() => {
-                alert('视频帧导出成功！');
-            }, 300);
         } else {
-            clearProgressTimer();
             const result = await response.json();
             alert('导出失败: ' + (result.error || '未知错误'));
         }
     } catch (error) {
-        clearProgressTimer();
         alert('导出失败: ' + error.message);
-    } finally {
-        exportFramesBtn.disabled = false;
-        exportFramesBtn.textContent = '导出所有帧 TXT';
-        setTimeout(() => {
-            exportProgress.classList.add('hidden');
-            progressFill.style.width = '0%';
-            progressText.textContent = '0%';
-        }, 1000);
     }
 }
 
 // 导出ASCII视频
 async function exportAsciiVideo() {
     if (!videoPath) return;
+    
+    // 暂停视频播放
+    if (isPlaying) {
+        pauseVideo();
+    }
+    
+    // 禁用播放控制
+    playPauseBtn.disabled = true;
+    stopBtn.disabled = true;
+    videoTimeline.disabled = true;
     
     exportProgress.classList.remove('hidden');
     exportVideoBtn.disabled = true;
@@ -378,6 +385,94 @@ async function exportAsciiVideo() {
     } finally {
         exportVideoBtn.disabled = false;
         exportVideoBtn.textContent = '导出 ASCII 视频';
+        
+        // 恢复播放控制
+        playPauseBtn.disabled = false;
+        stopBtn.disabled = false;
+        videoTimeline.disabled = false;
+        
+        setTimeout(() => {
+            exportProgress.classList.add('hidden');
+            progressFill.style.width = '0%';
+            progressText.textContent = '0%';
+        }, 1000);
+    }
+}
+
+// 导出ASCII GIF
+async function exportAsciiGif() {
+    if (!videoPath) return;
+    
+    // 暂停视频播放
+    if (isPlaying) {
+        pauseVideo();
+    }
+    
+    // 禁用播放控制
+    playPauseBtn.disabled = true;
+    stopBtn.disabled = true;
+    videoTimeline.disabled = true;
+    
+    exportProgress.classList.remove('hidden');
+    exportGifBtn.disabled = true;
+    exportGifBtn.textContent = '正在导出...';
+    
+    // 模拟进度（GIF需要先导出视频，时间和视频导出相近）
+    const estimatedTime = videoInfo.frame_count * 100; // 每帧约100ms
+    simulateProgress(estimatedTime);
+    
+    const formData = new FormData();
+    formData.append('video_path', videoPath);
+    formData.append('filename', currentFile.name);
+    
+    const params = getParams();
+    Object.keys(params).forEach(key => {
+        formData.append(key, params[key]);
+    });
+    
+    try {
+        const response = await fetch('/api/convert/video/export_gif', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            // 清除定时器，立即跳到100%
+            clearProgressTimer();
+            progressFill.style.width = '100%';
+            progressText.textContent = '100%';
+            
+            const blob = await response.blob();
+            const fileName = currentFile.name.split('.')[0];
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${fileName}_ascii.gif`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            setTimeout(() => {
+                alert('ASCII GIF导出成功！');
+            }, 300);
+        } else {
+            clearProgressTimer();
+            const result = await response.json();
+            alert('导出失败: ' + (result.error || '未知错误'));
+        }
+    } catch (error) {
+        clearProgressTimer();
+        alert('导出失败: ' + error.message);
+    } finally {
+        exportGifBtn.disabled = false;
+        exportGifBtn.textContent = '导出 ASCII GIF';
+        
+        // 恢复播放控制
+        playPauseBtn.disabled = false;
+        stopBtn.disabled = false;
+        videoTimeline.disabled = false;
+        
         setTimeout(() => {
             exportProgress.classList.add('hidden');
             progressFill.style.width = '0%';
@@ -437,6 +532,13 @@ function setupEventListeners() {
         debouncedConvert();
     });
 
+    // 颜色改变时实时转换
+    colorRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            debouncedConvert();
+        });
+    });
+
     // 上传区域点击
     uploadArea.addEventListener('click', () => {
         fileInput.click();
@@ -489,26 +591,10 @@ function setupEventListeners() {
         showVideoFrame(time);
     });
 
-    // 下载按钮
-    downloadTxtBtn.addEventListener('click', () => {
-        if (!currentAsciiText) {
-            alert('没有可下载的内容');
-            return;
-        }
-        
-        const blob = new Blob([currentAsciiText], { type: 'text/plain; charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'ascii_art.txt';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    });
-
-    exportFramesBtn.addEventListener('click', exportAllFrames);
+    // 导出图片按钮
+    exportImageBtn.addEventListener('click', exportImage);
     exportVideoBtn.addEventListener('click', exportAsciiVideo);
+    exportGifBtn.addEventListener('click', exportAsciiGif);
 }
 
 // 处理文件上传
@@ -529,9 +615,8 @@ function handleFileUpload(file) {
         fileTypeIndicator.className = 'file-type-indicator image';
         
         videoControls.classList.add('hidden');
-        exportFramesBtn.classList.add('hidden');
         exportVideoBtn.classList.add('hidden');
-        downloadTxtBtn.textContent = '下载 TXT';
+        exportGifBtn.classList.add('hidden');
         
         // 立即转换图片
         convertImage();
