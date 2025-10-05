@@ -8,6 +8,9 @@ import zipfile
 from pathlib import Path
 from ascii_maker import ImageToASCII, VideoToASCII
 import tempfile
+import time
+import random
+import string
 
 app = FastAPI(title="Image to ASCII Converter")
 
@@ -27,6 +30,12 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 # 挂载前端静态文件
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
+def generate_safe_filename(prefix: str = "file") -> str:
+    """生成安全的文件名：前缀_时间戳_随机字符"""
+    timestamp = int(time.time())
+    random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+    return f"{prefix}_{timestamp}_{random_str}"
+
 @app.get("/")
 async def root():
     """返回前端页面"""
@@ -36,11 +45,6 @@ async def root():
 async def convert_image(
     file: UploadFile = File(...),
     width: int = Form(100),
-    chars_type: str = Form('standard'),
-    scale: float = Form(0.43),
-    invert: bool = Form(False),
-    colored: bool = Form(False),
-    brightness: int = Form(0),
     contrast: float = Form(1.0)
 ):
     """
@@ -55,11 +59,6 @@ async def convert_image(
         # 创建转换器
         converter = ImageToASCII(
             width=width,
-            chars_type=chars_type,
-            scale=scale,
-            invert=invert,
-            colored=colored,
-            brightness=brightness,
             contrast=contrast
         )
         
@@ -120,11 +119,6 @@ async def convert_video_frame(
     video_path: str = Form(...),
     time_sec: float = Form(0),
     width: int = Form(100),
-    chars_type: str = Form('standard'),
-    scale: float = Form(0.43),
-    invert: bool = Form(False),
-    colored: bool = Form(False),
-    brightness: int = Form(0),
     contrast: float = Form(1.0)
 ):
     """
@@ -134,11 +128,6 @@ async def convert_video_frame(
         # 创建转换器
         converter = VideoToASCII(
             width=width,
-            chars_type=chars_type,
-            scale=scale,
-            invert=invert,
-            colored=colored,
-            brightness=brightness,
             contrast=contrast
         )
         
@@ -166,64 +155,45 @@ async def export_video_frames(
     video_path: str = Form(...),
     filename: str = Form(...),
     width: int = Form(100),
-    chars_type: str = Form('simple'),
-    scale: float = Form(0.43),
-    invert: bool = Form(False),
-    colored: bool = Form(False),
-    brightness: int = Form(0),
     contrast: float = Form(1.0)
 ):
     """
     导出视频所有帧为TXT文件（打包成ZIP，以文件名命名）
     """
     try:
-        # 安全的文件名（ASCII）
-        try:
-            base_name = os.path.splitext(filename)[0]
-            base_name.encode('ascii')
-        except (UnicodeEncodeError, UnicodeDecodeError):
-            base_name = "ascii_frames"
+        # 生成安全的文件名
+        safe_base_name = generate_safe_filename("ascii_frames")
 
         # 限制最大安全宽度
         safe_width = min(width, 150)
         
         # 创建临时目录
         with tempfile.TemporaryDirectory() as temp_dir:
-            output_dir = Path(temp_dir) / f"{base_name}_ascii_frames"
+            output_dir = Path(temp_dir) / safe_base_name
             
-            # 创建转换器（强制简单字符集和关闭彩色/反转）
+            # 创建转换器
             converter = VideoToASCII(
                 width=safe_width,
-                chars_type='simple',
-                scale=scale,
-                invert=False,
-                colored=False,
-                brightness=brightness,
                 contrast=contrast
             )
             
             # 提取所有帧
             frame_files = converter.extract_all_frames(video_path, str(output_dir))
             
-            # 打包成ZIP
-            safe_zip_name = f"{base_name}_ascii_frames.zip"
-            try:
-                safe_zip_name.encode('ascii')
-            except UnicodeEncodeError:
-                safe_zip_name = "ascii_frames.zip"
-
+            # 打包成ZIP - 使用安全的文件名
+            safe_zip_name = f"{safe_base_name}.zip"
             zip_path = Path(temp_dir) / safe_zip_name
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 for frame_file in frame_files:
-                    # 保持文件夹结构，但使用ASCII安全的顶级目录名
-                    arcname = os.path.join(f"{base_name}_ascii_frames", os.path.basename(frame_file))
+                    # 保持文件夹结构
+                    arcname = os.path.join(safe_base_name, os.path.basename(frame_file))
                     zipf.write(frame_file, arcname)
             
             # 读取ZIP文件内容
             with open(zip_path, 'rb') as f:
                 zip_content = f.read()
         
-        # 返回ZIP文件（ASCII安全文件名）
+            # 返回ZIP文件
         return StreamingResponse(
             iter([zip_content]),
             media_type="application/zip",
@@ -247,11 +217,6 @@ async def export_ascii_video(
     video_path: str = Form(...),
     filename: str = Form(...),
     width: int = Form(100),
-    chars_type: str = Form('simple'),
-    scale: float = Form(0.43),
-    invert: bool = Form(False),
-    colored: bool = Form(False),
-    brightness: int = Form(0),
     contrast: float = Form(1.0)
 ):
     """
@@ -261,30 +226,19 @@ async def export_ascii_video(
         # 限制宽度以保证稳定性
         safe_width = min(width, 150)
         
-        # 获取文件名（不含扩展名），确保ASCII兼容
-        try:
-            base_name = os.path.splitext(filename)[0]
-            # 测试是否可以编码为ASCII
-            base_name.encode('ascii')
-        except (UnicodeEncodeError, UnicodeDecodeError):
-            # 如果文件名包含非ASCII字符，使用默认名称
-            base_name = "ascii_video"
+        # 生成安全的文件名
+        safe_filename = generate_safe_filename("ascii_video") + ".mp4"
         
         # 创建转换器
         converter = VideoToASCII(
             width=safe_width,
-            chars_type=chars_type,
-            scale=scale,
-            invert=False,  # 强制关闭反转
-            colored=False,  # 强制关闭彩色
-            brightness=brightness,
             contrast=contrast
         )
         
         # 创建临时目录
         with tempfile.TemporaryDirectory() as temp_dir:
-            # 使用简单的ASCII文件名
-            output_video = Path(temp_dir) / "output.mp4"
+            # 使用安全的文件名
+            output_video = Path(temp_dir) / safe_filename
             
             # 生成ASCII视频
             converter.export_video(video_path, str(output_video))
@@ -295,13 +249,7 @@ async def export_ascii_video(
         
         # 不删除原视频文件，保持页面状态
         
-        # 返回视频文件，文件名使用ASCII安全的名称
-        safe_filename = f"{base_name}_ascii.mp4"
-        try:
-            safe_filename.encode('ascii')
-        except UnicodeEncodeError:
-            safe_filename = "ascii_video.mp4"
-        
+        # 返回视频文件
         return StreamingResponse(
             iter([video_content]),
             media_type="video/mp4",
@@ -328,4 +276,4 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)

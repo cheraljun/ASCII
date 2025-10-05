@@ -98,11 +98,6 @@ function escapeHtml(text) {
 function getParams() {
     return {
         width: parseInt(widthInput.value),
-        chars_type: 'simple',
-        scale: 0.43,
-        invert: false,
-        colored: false,
-        brightness: 0,
         contrast: parseFloat(contrastInput.value)
     };
 }

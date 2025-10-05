@@ -7,32 +7,17 @@ import os
 class ImageToASCII:
     """图片转ASCII核心转换器"""
     
-    CHARS_SETS = {
-        'simple': " .:-=+*#%@",
-        'standard': " .'`^\",:;Il!i~+_-?]}{1)(|/tfjrxnuvcz*#MW&8%@",
-        'detailed': " .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$"
-    }
+    # 字符集：从亮到暗的渐变
+    CHARS = " .:-=#"
     
     def __init__(self, 
                  width: int = 100,
-                 chars_type: str = 'standard',
-                 scale: float = 0.43,
-                 invert: bool = False,
-                 colored: bool = False,
-                 brightness: int = 0,
                  contrast: float = 1.0):
         
         self.width = width
-        self.chars = self.CHARS_SETS.get(chars_type, self.CHARS_SETS['standard'])
-        self.scale = scale
-        self.invert = invert
-        self.colored = colored
-        self.brightness = brightness
+        self.chars = self.CHARS
+        self.scale = 0.43  # 固定宽高比
         self.contrast = contrast
-        
-        # 如果需要反转，反转字符集
-        if self.invert:
-            self.chars = self.chars[::-1]
     
     def resize_image(self, image: Image.Image) -> Image.Image:
         """调整图片尺寸，保持宽高比"""
@@ -42,28 +27,16 @@ class ImageToASCII:
         return image.resize((self.width, new_height))
     
     def adjust_image(self, image: Image.Image) -> Image.Image:
-        """调整亮度和对比度"""
-        # 调整对比度
+        """调整对比度"""
         if self.contrast != 1.0:
             enhancer = ImageEnhance.Contrast(image)
             image = enhancer.enhance(self.contrast)
-        
-        # 调整亮度
-        if self.brightness != 0:
-            enhancer = ImageEnhance.Brightness(image)
-            brightness_factor = 1.0 + (self.brightness / 100)
-            image = enhancer.enhance(brightness_factor)
-        
         return image
     
     def get_char(self, brightness: int) -> str:
         """根据亮度值获取对应的ASCII字符"""
         char_index = int((brightness / 255) * (len(self.chars) - 1))
         return self.chars[char_index]
-    
-    def rgb_to_ansi(self, r: int, g: int, b: int) -> str:
-        """将RGB颜色转换为ANSI转义码"""
-        return f"\033[38;2;{r};{g};{b}m"
     
     def convert_to_ascii(self, image_path: str) -> str:
         """转换为ASCII文本"""
@@ -73,16 +46,11 @@ class ImageToASCII:
         # 调整尺寸
         image = self.resize_image(image)
         
-        # 调整亮度和对比度
+        # 调整对比度
         image = self.adjust_image(image)
         
-        # 根据是否彩色选择处理方式
-        if self.colored:
-            rgb_image = image.convert('RGB')
-            grayscale_image = image.convert('L')
-        else:
-            grayscale_image = image.convert('L')
-            rgb_image = None
+        # 转换为灰度图
+        grayscale_image = image.convert('L')
         
         # 转换为ASCII
         ascii_str = ""
@@ -90,21 +58,8 @@ class ImageToASCII:
             for x in range(grayscale_image.width):
                 brightness = grayscale_image.getpixel((x, y))
                 char = self.get_char(brightness)
-                
-                if self.colored and rgb_image:
-                    r, g, b = rgb_image.getpixel((x, y))
-                    ascii_str += self.rgb_to_ansi(r, g, b) + char
-                else:
-                    ascii_str += char
-            
-            # 重置颜色并换行
-            if self.colored:
-                ascii_str += "\033[0m"
+                ascii_str += char
             ascii_str += '\n'
-        
-        # 最后重置颜色
-        if self.colored:
-            ascii_str += "\033[0m"
         
         return ascii_str
 
@@ -114,20 +69,10 @@ class VideoToASCII:
     
     def __init__(self, 
                  width: int = 100,
-                 chars_type: str = 'standard',
-                 scale: float = 0.43,
-                 invert: bool = False,
-                 colored: bool = False,
-                 brightness: int = 0,
                  contrast: float = 1.0):
         
         self.converter = ImageToASCII(
             width=width,
-            chars_type=chars_type,
-            scale=scale,
-            invert=invert,
-            colored=colored,
-            brightness=brightness,
             contrast=contrast
         )
     
@@ -160,35 +105,20 @@ class VideoToASCII:
         # 调整尺寸
         image = self.converter.resize_image(image)
         
-        # 调整亮度和对比度
+        # 调整对比度
         image = self.converter.adjust_image(image)
         
-        # 转换为ASCII
-        if self.converter.colored:
-            rgb_image = image.convert('RGB')
-            grayscale_image = image.convert('L')
-        else:
-            grayscale_image = image.convert('L')
-            rgb_image = None
+        # 转换为灰度图
+        grayscale_image = image.convert('L')
         
+        # 转换为ASCII
         ascii_str = ""
         for y in range(grayscale_image.height):
             for x in range(grayscale_image.width):
                 brightness = grayscale_image.getpixel((x, y))
                 char = self.converter.get_char(brightness)
-                
-                if self.converter.colored and rgb_image:
-                    r, g, b = rgb_image.getpixel((x, y))
-                    ascii_str += self.converter.rgb_to_ansi(r, g, b) + char
-                else:
-                    ascii_str += char
-            
-            if self.converter.colored:
-                ascii_str += "\033[0m"
+                ascii_str += char
             ascii_str += '\n'
-        
-        if self.converter.colored:
-            ascii_str += "\033[0m"
         
         return ascii_str
     
@@ -336,8 +266,6 @@ class VideoToASCII:
     
     def _sanitize_ascii(self, text: str) -> str:
         """清理文本，只保留ASCII字符"""
-        # 先移除ANSI转义码
-        text = self._remove_ansi_codes(text)
         # 只保留ASCII字符（32-126）和换行符
         result = []
         for char in text:
@@ -348,10 +276,4 @@ class VideoToASCII:
             else:
                 result.append(' ')
         return ''.join(result)
-    
-    def _remove_ansi_codes(self, text: str) -> str:
-        """移除ANSI转义码"""
-        import re
-        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-        return ansi_escape.sub('', text)
 
